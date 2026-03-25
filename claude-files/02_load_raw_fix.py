@@ -1,40 +1,60 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "2"
+# ///
 # MAGIC %md
 # MAGIC # 02 — Load Raw
-# MAGIC Reads each extracted temp view, writes immutable Parquet snapshots to the Chinook volume,
+# MAGIC Reads directly from the Chinook Azure SQL source via Connection Manager federation,
+# MAGIC writes immutable Parquet snapshots to the Chinook volume,
 # MAGIC and logs every run to the child execution metrics table.
+# MAGIC
+# MAGIC NOTE: This notebook reads from source directly — temp views do not persist across
+# MAGIC notebook boundaries in a Databricks Job.
 
 # COMMAND ----------
+
 # MAGIC %md ## Parameters
 
 # COMMAND ----------
-dbutils.widgets.text("catalog_name", "workspace")
-dbutils.widgets.text("schema_name", "raw_zone")
-dbutils.widgets.text("base_path", "/Volumes/workspace/raw_zone/chinook")
 
-catalog_name = dbutils.widgets.get("catalog_name")
-schema_name  = dbutils.widgets.get("schema_name")
-base_path    = dbutils.widgets.get("base_path")
+dbutils.widgets.text("catalog_name",   "workspace")
+dbutils.widgets.text("schema_name",    "raw_zone")
+dbutils.widgets.text("base_path",      "/Volumes/workspace/raw_zone/chinook")
+dbutils.widgets.text("source_catalog", "chinook_azure_catalog")
+dbutils.widgets.text("source_schema",  "chinook")
 
-print(f"catalog_name : {catalog_name}")
-print(f"schema_name  : {schema_name}")
-print(f"base_path    : {base_path}")
+catalog_name   = dbutils.widgets.get("catalog_name")
+schema_name    = dbutils.widgets.get("schema_name")
+base_path      = dbutils.widgets.get("base_path")
+source_catalog = dbutils.widgets.get("source_catalog")
+source_schema  = dbutils.widgets.get("source_schema")
+
+print(f"catalog_name   : {catalog_name}")
+print(f"schema_name    : {schema_name}")
+print(f"base_path      : {base_path}")
+print(f"source_catalog : {source_catalog}")
+print(f"source_schema  : {source_schema}")
 
 # COMMAND ----------
+
 # MAGIC %md ## Imports
 
 # COMMAND ----------
+
 from datetime import datetime, timezone
 from pyspark.sql import Row
 
-run_ts      = datetime.now(timezone.utc)
-run_date    = run_ts.strftime("%Y/%m/%d")
-run_ts_str  = run_ts.strftime("%Y%m%d_%H%M%S")
+run_ts     = datetime.now(timezone.utc)
+run_date   = run_ts.strftime("%Y/%m/%d")
+run_ts_str = run_ts.strftime("%Y%m%d_%H%M%S")
 
 # COMMAND ----------
+
 # MAGIC %md ## Read Active Tables from Parent Metadata
 
 # COMMAND ----------
+
 parent_df = spark.table(f"{catalog_name}.{schema_name}.pipeline_metadata_parent")
 active_tables = (
     parent_df
@@ -46,9 +66,17 @@ active_tables = (
 print(f"Tables to load into Raw: {[r.table_name for r in active_tables]}")
 
 # COMMAND ----------
-# MAGIC %md ## Write Parquet Snapshots + Log Metrics
+
+# MAGIC %md ## Extract from Source + Write Parquet Snapshots + Log Metrics
 
 # COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW VOLUMES IN workspace.raw_zone;
+# MAGIC
+
+# COMMAND ----------
+
 child_rows = []
 
 for row in active_tables:
@@ -60,8 +88,9 @@ for row in active_tables:
     file_loc   = ""
 
     try:
-        # Read from temp view created by notebook 01
-        df        = spark.table(f"extract_{table_name.lower()}")
+        # Read directly from federated Azure SQL source — no temp view dependency
+        fq_source = f"{source_catalog}.{source_schema}.{table_name}"
+        df        = spark.read.table(fq_source)
         src_count = df.count()
 
         # Dynamic path — never overwrites previous runs
@@ -92,9 +121,11 @@ for row in active_tables:
     ))
 
 # COMMAND ----------
+
 # MAGIC %md ## Write to Child Execution Metrics Table
 
 # COMMAND ----------
+
 from pyspark.sql.types import (
     StructType, StructField, StringType, TimestampType,
     IntegerType, DateType
@@ -119,9 +150,11 @@ print("\nChild metrics written.")
 display(metrics_df)
 
 # COMMAND ----------
+
 # MAGIC %md ## Fail the notebook if any table failed
 
 # COMMAND ----------
+
 failures = [r for r in child_rows if r.status == "FAILED"]
 if failures:
     failed_names = [r.table_name for r in failures]

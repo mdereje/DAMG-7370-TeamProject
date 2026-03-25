@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "2"
+# ///
 # MAGIC %md
 # MAGIC # 04 — Bronze to Silver
 # MAGIC Runs DQX data profiling and quality validation on each Bronze table.
@@ -6,9 +10,11 @@
 # MAGIC Passing records are cleaned and written to Silver Delta tables.
 
 # COMMAND ----------
+
 # MAGIC %md ## Parameters
 
 # COMMAND ----------
+
 dbutils.widgets.text("catalog_name",        "workspace")
 dbutils.widgets.text("bronze_schema_name",  "bronze")
 dbutils.widgets.text("silver_schema_name",  "silver")
@@ -24,12 +30,19 @@ print(f"bronze_schema_name : {bronze_schema_name}")
 print(f"silver_schema_name : {silver_schema_name}")
 
 # COMMAND ----------
+
 # MAGIC %md ## Install & Import DQX
 
 # COMMAND ----------
+
 # MAGIC %pip install databricks-labs-dqx --quiet
 
 # COMMAND ----------
+
+# MAGIC %restart_python
+
+# COMMAND ----------
+
 from databricks.labs.dqx.engine import DQEngine
 from databricks.labs.dqx.col_functions import (
     is_not_null, is_not_null_and_not_empty,
@@ -43,9 +56,11 @@ from datetime import datetime, timezone
 run_ts = datetime.now(timezone.utc)
 
 # COMMAND ----------
+
 # MAGIC %md ## DQX Rule Definitions per Table
 
 # COMMAND ----------
+
 # Define quality rules for each table.
 # Keys must match the Bronze table names exactly (lowercase).
 DQX_RULES = {
@@ -94,9 +109,11 @@ DQX_RULES = {
 }
 
 # COMMAND ----------
+
 # MAGIC %md ## Profiling Helper
 
 # COMMAND ----------
+
 def profile_dataframe(df, table_name):
     """Print basic profiling stats for a Bronze DataFrame."""
     total = df.count()
@@ -119,9 +136,11 @@ def profile_dataframe(df, table_name):
     return total
 
 # COMMAND ----------
+
 # MAGIC %md ## DQX Execution Log Table (ensure exists)
 
 # COMMAND ----------
+
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {catalog_name}.{silver_schema_name}.dqx_execution_log (
         table_name          STRING,
@@ -135,9 +154,11 @@ spark.sql(f"""
 """)
 
 # COMMAND ----------
+
 # MAGIC %md ## Quarantine Table (ensure exists)
 
 # COMMAND ----------
+
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {catalog_name}.{silver_schema_name}.quarantine (
         table_name          STRING,
@@ -149,9 +170,11 @@ spark.sql(f"""
 """)
 
 # COMMAND ----------
+
 # MAGIC %md ## Main Loop — Bronze → DQX → Silver
 
 # COMMAND ----------
+
 # Get active table list from parent metadata
 parent_df = spark.table(f"{catalog_name}.{raw_schema_name}.pipeline_metadata_parent")
 active_tables = [
@@ -250,9 +273,11 @@ for table_name in active_tables:
     ))
 
 # COMMAND ----------
+
 # MAGIC %md ## Write DQX Execution Log
 
 # COMMAND ----------
+
 from pyspark.sql.types import StructType, StructField, LongType
 
 log_schema = StructType([
