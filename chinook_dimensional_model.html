@@ -1,0 +1,148 @@
+
+<div id="erd" style="padding: 8px 0"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"Anthropic Sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"Anthropic Sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+  },
+});
+const diagram = `erDiagram
+  fact_sales {
+    long invoice_line_id PK
+    long invoice_id
+    long customer_key FK
+    long track_key FK
+    int date_key FK
+    long support_rep_key FK
+    int quantity
+    decimal unit_price
+    decimal line_total
+    string billing_country
+    string billing_city
+  }
+  fact_sales_customer_agg {
+    long customer_key FK
+    long total_invoices
+    long total_quantity
+    decimal total_revenue
+    decimal avg_line_total
+    int last_purchase_date_key
+  }
+  dim_customer {
+    long customer_key PK
+    int customer_id
+    string first_name
+    string last_name
+    string company
+    string city
+    string country
+    string email
+    int support_rep_id
+    date effective_start_date
+    date effective_end_date
+    boolean is_current
+  }
+  dim_track {
+    long track_key PK
+    int track_id
+    string track_name
+    int album_id
+    int media_type_id
+    int genre_id
+    string composer
+    int duration_ms
+    decimal unit_price
+  }
+  dim_date {
+    int date_key PK
+    date full_date
+    int year
+    int quarter
+    int month
+    string month_name
+    int day_of_month
+    string day_name
+    boolean is_weekend
+  }
+  dim_artist {
+    long artist_key PK
+    int artist_id
+    string artist_name
+  }
+  dim_album {
+    long album_key PK
+    int album_id
+    string album_title
+    int artist_id
+  }
+  dim_genre {
+    long genre_key PK
+    int genre_id
+    string genre_name
+  }
+  dim_mediatype {
+    long media_type_key PK
+    int media_type_id
+    string media_type_name
+  }
+  dim_employee {
+    long employee_key PK
+    int employee_id
+    string employee_name
+    string title
+    int reports_to_employee_id
+    date hire_date
+    string country
+  }
+  dim_playlist {
+    long playlist_key PK
+    int playlist_id
+    string playlist_name
+  }
+  fact_sales }o--|| dim_customer : "customer_key"
+  fact_sales }o--|| dim_track : "track_key"
+  fact_sales }o--|| dim_date : "date_key"
+  fact_sales }o--|| dim_employee : "support_rep_key"
+  fact_sales_customer_agg }o--|| dim_customer : "customer_key"
+  dim_album }o--|| dim_artist : "artist_id"
+  dim_track }o--|| dim_album : "album_id"
+  dim_track }o--|| dim_genre : "genre_id"
+  dim_track }o--|| dim_mediatype : "media_type_id"
+`;
+const { svg } = await mermaid.render('erd-svg', diagram);
+document.getElementById('erd').innerHTML = svg;
+
+document.querySelectorAll('#erd svg.erDiagram .node').forEach(node => {
+  const firstPath = node.querySelector('path[d]');
+  if (!firstPath) return;
+  const d = firstPath.getAttribute('d');
+  const nums = d.match(/-?[\d.]+/g)?.map(Number);
+  if (!nums || nums.length < 8) return;
+  const xs = [nums[0], nums[2], nums[4], nums[6]];
+  const ys = [nums[1], nums[3], nums[5], nums[7]];
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', x); rect.setAttribute('y', y);
+  rect.setAttribute('width', w); rect.setAttribute('height', h);
+  rect.setAttribute('rx', '8');
+  for (const a of ['fill', 'stroke', 'stroke-width', 'class', 'style']) {
+    if (firstPath.hasAttribute(a)) rect.setAttribute(a, firstPath.getAttribute(a));
+  }
+  firstPath.replaceWith(rect);
+});
+
+document.querySelectorAll('#erd svg.erDiagram .row-rect-odd path, #erd svg.erDiagram .row-rect-even path').forEach(p => {
+  p.setAttribute('stroke', 'none');
+});
+</script>
