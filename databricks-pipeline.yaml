@@ -1,0 +1,55 @@
+resources:
+  jobs:
+    team_project_full_pipeline:
+      name: team_project_full_pipeline
+      tasks:
+        - task_key: 02_load_raw
+          notebook_task:
+            notebook_path: /Workspace/Users/dereje.m@northeastern.edu/DAMG-7370-TeamProject/claude-files/02_load_raw_fix
+            base_parameters:
+              base_path: /Volumes/workspace/raw_zone/chinook
+              catalog_name: workspace
+              schema_name: raw_zone
+              source_schema: chinook
+            source: WORKSPACE
+        - task_key: 03_raw_to_bronze
+          depends_on:
+            - task_key: 02_load_raw
+          notebook_task:
+            notebook_path: /Workspace/Users/dereje.m@northeastern.edu/DAMG-7370-TeamProject/claude-files/03_raw_to_bronze
+            base_parameters:
+              bronze_schema_name: bronze
+              catalog_name: workspace
+              raw_schema_name: raw_zone
+            source: WORKSPACE
+        - task_key: 04_bronze_to_silver
+          depends_on:
+            - task_key: 03_raw_to_bronze
+          notebook_task:
+            notebook_path: /Workspace/Users/dereje.m@northeastern.edu/DAMG-7370-TeamProject/claude-files/04_bronze_to_silver_fix
+            base_parameters:
+              bronze_schema_name: bronze
+              catalog_name: workspace
+              raw_schema_name: raw_zone
+            source: WORKSPACE
+        - task_key: 05_silver_to_gold
+          depends_on:
+            - task_key: 04_bronze_to_silver
+          notebook_task:
+            notebook_path: /Workspace/Users/dereje.m@northeastern.edu/DAMG-7370-TeamProject/claude-files/05_silver_to_gold_fix
+            base_parameters:
+              catalog_name: workspace
+              gold_schema_name: gold
+              silver_schema_name: silver
+            source: WORKSPACE
+      git_source:
+        git_url: https://github.com/mdereje/DAMG-7370-TeamProject
+        git_provider: gitHub
+        git_tag: pipeline
+      queue:
+        enabled: true
+      environments:
+        - environment_key: Default
+          spec:
+            environment_version: "5"
+      performance_target: PERFORMANCE_OPTIMIZED
