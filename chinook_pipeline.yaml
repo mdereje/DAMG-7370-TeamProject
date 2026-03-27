@@ -1,0 +1,62 @@
+resources:
+  jobs:
+    team_project_chinook_pipeline:
+      name: team_project_chinook_pipeline
+      tasks:
+        - task_key: load_raw
+          notebook_task:
+            notebook_path: /Workspace/Users/kanade.pr@northeastern.edu/DAMG
+              7370/DAMG-7370-TeamProject/pipeline_notebooks/02_load_raw_fix
+            base_parameters:
+              source_catalog: azure_sql_chinook_catalog
+              source_schema: chinook
+              destination_catalog: workspace
+              destination_schema: raw_zone
+              base_path: /Volumes/workspace/raw_zone/chinook
+            source: WORKSPACE
+        - task_key: raw_to_bronze
+          depends_on:
+            - task_key: load_raw
+          notebook_task:
+            notebook_path: /Workspace/Users/kanade.pr@northeastern.edu/DAMG
+              7370/DAMG-7370-TeamProject/pipeline_notebooks/03_raw_to_bronze
+            base_parameters:
+              catalog_name: workspace
+              raw_schema_name: raw_zone
+              bronze_schema_name: bronze
+            source: WORKSPACE
+          environment_key: Default
+        - task_key: bronze_to_silver
+          depends_on:
+            - task_key: raw_to_bronze
+          notebook_task:
+            notebook_path: /Workspace/Users/kanade.pr@northeastern.edu/DAMG
+              7370/DAMG-7370-TeamProject/pipeline_notebooks/04_bronze_to_silver_fix
+            base_parameters:
+              catalog_name: workspace
+              raw_schema_name: raw_zone
+              bronze_schema_name: bronze
+              silver_schema_name: silver
+            source: WORKSPACE
+        - task_key: silver_to_gold
+          depends_on:
+            - task_key: bronze_to_silver
+          notebook_task:
+            notebook_path: /Workspace/Users/kanade.pr@northeastern.edu/DAMG
+              7370/DAMG-7370-TeamProject/pipeline_notebooks/05_silver_to_gold_fix
+            base_parameters:
+              catalog_name: workspace
+              silver_schema_name: silver
+              gold_schema_name: gold
+            source: WORKSPACE
+      git_source:
+        git_url: https://github.com/mdereje/DAMG-7370-TeamProject.git
+        git_provider: gitHub
+        git_tag: chinook_pipeline
+      queue:
+        enabled: true
+      environments:
+        - environment_key: Default
+          spec:
+            environment_version: "5"
+      performance_target: PERFORMANCE_OPTIMIZED

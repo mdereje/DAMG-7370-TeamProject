@@ -17,13 +17,8 @@
 
 # COMMAND ----------
 
-# dbutils.widgets.text("catalog_name",   "workspace")
-# dbutils.widgets.text("schema_name",    "raw_zone")
-# dbutils.widgets.text("source_catalog", "chinook_azure_catalog")
-# dbutils.widgets.text("source_schema",  "dbo")
-
-catalog_name   = dbutils.widgets.get("catalog_name")
-schema_name    = dbutils.widgets.get("schema_name")
+catalog_name   = dbutils.widgets.get("destination_catalog")
+schema_name    = dbutils.widgets.get("destination_schema")
 source_catalog = dbutils.widgets.get("source_catalog")
 source_schema  = dbutils.widgets.get("source_schema")
 

@@ -17,10 +17,6 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",       "workspace")
-dbutils.widgets.text("silver_schema_name", "silver")
-dbutils.widgets.text("gold_schema_name",   "gold")
-
 catalog_name       = dbutils.widgets.get("catalog_name")
 silver_schema_name = dbutils.widgets.get("silver_schema_name")
 gold_schema_name   = dbutils.widgets.get("gold_schema_name")
@@ -250,6 +246,10 @@ print(f"dim_date: {date_df.count()} rows")
 
 # COMMAND ----------
 
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+from delta.tables import DeltaTable
+
 customer_silver = spark.table(silver("customer"))
 
 # Columns that, if changed, trigger a new SCD2 version
@@ -280,13 +280,8 @@ incoming = (
 
 gold_customer_table = gold("dim_customer")
 
-# ---- Check table existence via Unity Catalog SQL — avoids Hive Metastore entirely ----
+# ---- Check table existence via Unity Catalog ----
 def table_exists_uc(full_table_name):
-    """
-    Queries information_schema.tables in Unity Catalog.
-    Safe on Spark Connect clusters with Hive Metastore disabled.
-    spark.catalog.tableExists(name, dbName) incorrectly routes to Hive; avoid it.
-    """
     parts = full_table_name.split(".")
     catalog_n, schema_n, table_n = parts[0], parts[1], parts[2]
     result = spark.sql(f"""
@@ -298,36 +293,42 @@ def table_exists_uc(full_table_name):
     return result > 0
 
 table_exists = table_exists_uc(gold_customer_table)
+
 if table_exists:
     existing = spark.table(gold_customer_table)
 
 if not table_exists:
     print("  dim_customer: first load — inserting all rows as current.")
+
+    # Assign surrogate key starting from 1
+    window = Window.orderBy(F.lit(1))
     first_load = (
         incoming
-        .withColumn("customer_key",        F.monotonically_increasing_id())
+        .withColumn("row_num", F.row_number().over(window))
+        .withColumn("customer_key", F.col("row_num"))
+        .drop("row_num")
         .withColumn("effective_start_date", F.lit(run_ts.date()).cast("date"))
-        .withColumn("effective_end_date",   F.lit(None).cast("date"))
-        .withColumn("is_current",           F.lit(True))
+        .withColumn("effective_end_date", F.lit(None).cast("date"))
+        .withColumn("is_current", F.lit(True))
     )
+
     first_load.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(gold_customer_table)
     print(f"  dim_customer: {first_load.count()} rows inserted.")
 
 else:
-    # ---- Subsequent loads — apply SCD Type 2 merge ----
     print("  dim_customer: applying SCD Type 2 merge.")
 
     dim_current = existing.filter("is_current = true")
 
     # Detect changed records
     tracked_incoming_cols = ["customer_id", "first_name", "last_name", "company", "address",
-                              "city", "state", "country", "postal_code", "phone", "fax", "email",
-                              "support_rep_id"]
+                              "city", "state", "country", "postal_code", "phone", "fax", "email", "support_rep_id"]
 
     changed = (
         incoming.alias("new")
         .join(dim_current.alias("old"), "customer_id", "inner")
     )
+
     # Build change condition
     change_condition = F.lit(False)
     for col in tracked_incoming_cols[1:]:   # skip customer_id
@@ -343,39 +344,50 @@ else:
     changed_id_list = [r.customer_id for r in changed_ids.collect()]
     print(f"  Changed customer_ids: {changed_id_list}")
 
+    # Get current max surrogate key
+    max_key = existing.select(F.coalesce(F.max("customer_key"), F.lit(0)).alias("max_key")).collect()[0]["max_key"]
+
     delta_table = DeltaTable.forName(spark, gold_customer_table)
 
     if changed_id_list:
-        # Step 1 — expire old current records for changed customers
+        # Step 1 — expire old current records
         delta_table.update(
             condition = F.col("customer_id").isin(changed_id_list) & F.col("is_current"),
             set = {
                 "effective_end_date": F.lit(run_ts.date()).cast("date"),
-                "is_current":         F.lit(False)
+                "is_current": F.lit(False)
             }
         )
 
         # Step 2 — insert new current versions for changed customers
+        window = Window.orderBy(F.lit(1))
         new_versions = (
             incoming
             .filter(F.col("customer_id").isin(changed_id_list))
-            .withColumn("customer_key",        F.monotonically_increasing_id())
+            .withColumn("row_num", F.row_number().over(window))
+            .withColumn("customer_key", F.col("row_num") + F.lit(max_key))
+            .drop("row_num")
             .withColumn("effective_start_date", F.lit(run_ts.date()).cast("date"))
-            .withColumn("effective_end_date",   F.lit(None).cast("date"))
-            .withColumn("is_current",           F.lit(True))
+            .withColumn("effective_end_date", F.lit(None).cast("date"))
+            .withColumn("is_current", F.lit(True))
         )
         new_versions.write.format("delta").mode("append").saveAsTable(gold_customer_table)
         print(f"  {len(changed_id_list)} customer(s) versioned with SCD Type 2.")
+
+        # Update max_key after inserting changed
+        max_key += new_versions.count()
 
     # Step 3 — insert brand-new customers (not in dim at all)
     existing_ids = [r.customer_id for r in existing.select("customer_id").distinct().collect()]
     truly_new = (
         incoming
         .filter(~F.col("customer_id").isin(existing_ids))
-        .withColumn("customer_key",        F.monotonically_increasing_id())
+        .withColumn("row_num", F.row_number().over(Window.orderBy(F.lit(1))))
+        .withColumn("customer_key", F.col("row_num") + F.lit(max_key))
+        .drop("row_num")
         .withColumn("effective_start_date", F.lit(run_ts.date()).cast("date"))
-        .withColumn("effective_end_date",   F.lit(None).cast("date"))
-        .withColumn("is_current",           F.lit(True))
+        .withColumn("effective_end_date", F.lit(None).cast("date"))
+        .withColumn("is_current", F.lit(True))
     )
     new_count = truly_new.count()
     if new_count > 0:

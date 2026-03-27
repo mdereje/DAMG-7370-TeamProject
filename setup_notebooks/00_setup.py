@@ -5,18 +5,21 @@
 # MAGIC Creates all required schemas and metadata tables.
 
 # COMMAND ----------
-dbutils.widgets.text("catalog_name", "workspace")
+
 catalog_name = dbutils.widgets.get("catalog_name")
 
 # COMMAND ----------
+
 # MAGIC %md ## Create Schemas
 
 # COMMAND ----------
+
 for schema in ["raw_zone", "bronze", "silver", "gold"]:
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog_name}.{schema}")
     print(f"Schema ready: {catalog_name}.{schema}")
 
 # COMMAND ----------
+
 # MAGIC %md ## Create Raw Zone Volume (run manually or via SQL)
 # MAGIC
 # MAGIC If the volume does not yet exist, run the following in a SQL cell or Catalog UI:
@@ -25,9 +28,11 @@ for schema in ["raw_zone", "bronze", "silver", "gold"]:
 # MAGIC ```
 
 # COMMAND ----------
+
 # MAGIC %md ## Create Parent Metadata Table
 
 # COMMAND ----------
+
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {catalog_name}.raw_zone.pipeline_metadata_parent (
         table_name    STRING        NOT NULL,
@@ -41,9 +46,11 @@ spark.sql(f"""
 print("pipeline_metadata_parent ready.")
 
 # COMMAND ----------
+
 # MAGIC %md ## Seed Parent Metadata — Chinook Tables
 
 # COMMAND ----------
+
 from datetime import date
 
 today = date.today()
@@ -91,9 +98,11 @@ else:
 display(spark.table(f"{catalog_name}.raw_zone.pipeline_metadata_parent"))
 
 # COMMAND ----------
+
 # MAGIC %md ## Create Child Execution Metrics Table
 
 # COMMAND ----------
+
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {catalog_name}.raw_zone.pipeline_metadata_child (
         table_name          STRING,
@@ -107,6 +116,3 @@ spark.sql(f"""
     USING DELTA
 """)
 print("pipeline_metadata_child ready.")
-
-# COMMAND ----------
-print("\nSetup complete. You can now run the pipeline job.")

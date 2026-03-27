@@ -6,12 +6,10 @@
 # MAGIC No transformations — Bronze is an exact Delta copy of Raw.
 
 # COMMAND ----------
+
 # MAGIC %md ## Parameters
 
 # COMMAND ----------
-dbutils.widgets.text("catalog_name",        "workspace")
-dbutils.widgets.text("raw_schema_name",     "raw_zone")
-dbutils.widgets.text("bronze_schema_name",  "bronze")
 
 catalog_name       = dbutils.widgets.get("catalog_name")
 raw_schema_name    = dbutils.widgets.get("raw_schema_name")
@@ -22,9 +20,11 @@ print(f"raw_schema_name    : {raw_schema_name}")
 print(f"bronze_schema_name : {bronze_schema_name}")
 
 # COMMAND ----------
+
 # MAGIC %md ## Get Latest File Location per Table from Child Metadata
 
 # COMMAND ----------
+
 from pyspark.sql import functions as F
 
 child_df = spark.table(f"{catalog_name}.{raw_schema_name}.pipeline_metadata_child")
@@ -41,9 +41,11 @@ latest_rows = latest_df.collect()
 print(f"Tables to promote to Bronze: {[r.table_name for r in latest_rows]}")
 
 # COMMAND ----------
+
 # MAGIC %md ## Load Raw Parquet → Write Bronze Delta (overwrite)
 
 # COMMAND ----------
+
 for row in latest_rows:
     table_name = row.table_name
     file_loc   = row.file_location

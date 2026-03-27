@@ -17,17 +17,13 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",        "workspace")
-dbutils.widgets.text("bronze_schema_name",  "bronze")
-dbutils.widgets.text("silver_schema_name",  "silver")
-dbutils.widgets.text("raw_schema_name",     "raw_zone")
-
 catalog_name       = dbutils.widgets.get("catalog_name")
 bronze_schema_name = dbutils.widgets.get("bronze_schema_name")
 silver_schema_name = dbutils.widgets.get("silver_schema_name")
 raw_schema_name    = dbutils.widgets.get("raw_schema_name")
 
 print(f"catalog_name       : {catalog_name}")
+print(f"raw_schema_name    : {raw_schema_name}")
 print(f"bronze_schema_name : {bronze_schema_name}")
 print(f"silver_schema_name : {silver_schema_name}")
 

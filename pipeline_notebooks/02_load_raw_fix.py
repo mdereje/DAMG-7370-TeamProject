@@ -18,14 +18,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",   "workspace")
-dbutils.widgets.text("schema_name",    "raw_zone")
-dbutils.widgets.text("base_path",      "/Volumes/workspace/raw_zone/chinook")
-dbutils.widgets.text("source_catalog", "chinook_azure_catalog")
-dbutils.widgets.text("source_schema",  "chinook")
-
-catalog_name   = dbutils.widgets.get("catalog_name")
-schema_name    = dbutils.widgets.get("schema_name")
+catalog_name   = dbutils.widgets.get("destination_catalog")
+schema_name    = dbutils.widgets.get("destination_schema")
 base_path      = dbutils.widgets.get("base_path")
 source_catalog = dbutils.widgets.get("source_catalog")
 source_schema  = dbutils.widgets.get("source_schema")
@@ -96,7 +90,8 @@ for row in active_tables:
         # Dynamic path — never overwrites previous runs
         file_loc  = f"{base_path}/{table_name.lower()}/{run_date}/{table_name.lower()}_{run_ts_str}.parquet"
 
-        df.write.mode("overwrite").parquet(file_loc)
+        #df.write.mode("overwrite").parquet(file_loc)
+        df.write.mode("append").parquet(file_loc)
 
         tgt_count = spark.read.parquet(file_loc).count()
 
